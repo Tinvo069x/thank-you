@@ -49,9 +49,38 @@ footer{text-align:center;padding:50px;color:#64748b}
 .modal{display:none;position:fixed;inset:0;background:#0008;justify-content:center;align-items:center;z-index:999}
 .box{background:#fff;max-width:650px;width:90%;padding:30px;border-radius:20px;position:relative}
 .close{position:absolute;top:12px;right:18px;font-size:28px;cursor:pointer}
+
+/* Fullscreen toggle */
+.fs-btn{position:fixed;top:20px;right:20px;z-index:500;display:flex;align-items:center;gap:8px;
+background:rgba(255,255,255,.85);backdrop-filter:blur(10px);border:1px solid #dbeafe;
+color:#2563eb;font-family:Manrope,sans-serif;font-weight:700;font-size:13px;
+padding:10px 16px;border-radius:30px;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.1);transition:.25s}
+.fs-btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.15)}
+
+/* Emoji reactions */
+.reactions{display:flex;justify-content:center;flex-wrap:wrap;gap:14px;margin:-10px 0 40px}
+.react-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;
+background:#fff;border:1px solid #eef2f7;border-radius:18px;padding:14px 20px 10px;
+cursor:pointer;box-shadow:0 10px 25px rgba(0,0,0,.06);transition:.25s;font-family:Manrope,sans-serif}
+.react-btn:hover{transform:translateY(-6px) scale(1.06);box-shadow:0 16px 30px rgba(0,0,0,.12);border-color:#dbeafe}
+.react-btn:active{transform:translateY(-2px) scale(.96)}
+.react-btn .emoji{font-size:34px;line-height:1}
+.react-btn .emoji img.emoji{width:34px;height:34px}
+.react-btn .count{font-size:13px;font-weight:800;color:#2563eb;min-width:14px}
+.react-btn .react-label{font-size:10px;color:#94a3b8;font-weight:600;letter-spacing:.5px}
+
+.float-emoji{position:fixed;pointer-events:none;font-size:30px;z-index:1000;
+animation:floatUp 1.7s ease-out forwards;}
+.float-emoji img.emoji{width:30px;height:30px}
+@keyframes floatUp{
+  0%{opacity:1;transform:translate(-50%,0) scale(.8) rotate(0deg)}
+  15%{transform:translate(-50%,-20px) scale(1.15) rotate(-8deg)}
+  100%{opacity:0;transform:translate(-50%,-190px) scale(1.3) rotate(10deg)}
+}
 </style>
 </head>
 <body>
+<button class="fs-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ <span id="fsLabel">Toàn màn hình</span></button>
 <div class="container">
   <div class="hero">
     <div class="badge">📅 Last Working Day • 26 June 2026</div>
@@ -85,6 +114,35 @@ footer{text-align:center;padding:50px;color:#64748b}
     </div>
   </div>
 
+  <!-- Reactions -->
+  <div class="reactions" id="reactions">
+    <button class="react-btn" data-emoji="👍" onclick="react(this)">
+      <span class="emoji">👍</span>
+      <span class="count">0</span>
+      <span class="react-label">THÍCH</span>
+    </button>
+    <button class="react-btn" data-emoji="❤️" onclick="react(this)">
+      <span class="emoji">❤️</span>
+      <span class="count">0</span>
+      <span class="react-label">YÊU THÍCH</span>
+    </button>
+    <button class="react-btn" data-emoji="😂" onclick="react(this)">
+      <span class="emoji">😂</span>
+      <span class="count">0</span>
+      <span class="react-label">HAHA</span>
+    </button>
+    <button class="react-btn" data-emoji="😮" onclick="react(this)">
+      <span class="emoji">😮</span>
+      <span class="count">0</span>
+      <span class="react-label">WOW</span>
+    </button>
+    <button class="react-btn" data-emoji="🥲" onclick="react(this)">
+      <span class="emoji">🥲</span>
+      <span class="count">0</span>
+      <span class="react-label">BỊN RỊN</span>
+    </button>
+  </div>
+
   <!-- Cards -->
   <div class="cards">
     <div class="card" onclick="msg('Managers','Thank you for your guidance and trust.')"><div class="icon">👔</div><h3>Managers</h3></div>
@@ -99,6 +157,7 @@ footer{text-align:center;padding:50px;color:#64748b}
 <div class="modal" id="m"><div class="box"><span class="close" onclick="document.getElementById('m').style.display='none'">&times;</span><h2 id="t"></h2><p id="c" style="margin-top:12px;color:#64748b;line-height:1.7"></p></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://emoji.fluent-cdn.com/latest/fluentemoji.min.js" crossorigin="anonymous"></script>
 <script>
 const last = new Date("2026-06-26T23:59:59");
 function tick() {
@@ -120,8 +179,60 @@ function msg(a, b) {
   document.getElementById('c').textContent = b;
   document.getElementById('m').style.display = 'flex';
   confetti({ particleCount: 120, spread: 80 });
+  fluentemoji.parse('#m');
 }
 window.onclick = e => { if (e.target == document.getElementById('m')) document.getElementById('m').style.display = 'none'; }
+
+/* ---------- Fullscreen toggle ---------- */
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  document.getElementById('fsLabel').textContent = document.fullscreenElement ? 'Thoát' : 'Toàn màn hình';
+});
+
+/* ---------- Emoji reactions ---------- */
+// Load saved counts
+document.querySelectorAll('.react-btn').forEach(btn => {
+  const emoji = btn.dataset.emoji;
+  const saved = localStorage.getItem('react_' + emoji);
+  if (saved) btn.querySelector('.count').textContent = saved;
+});
+
+function react(btn) {
+  const emoji = btn.dataset.emoji;
+  const countEl = btn.querySelector('.count');
+  const count = parseInt(localStorage.getItem('react_' + emoji) || '0', 10) + 1;
+  localStorage.setItem('react_' + emoji, count);
+  countEl.textContent = count;
+
+  // little bounce feedback
+  btn.style.transform = 'scale(1.2)';
+  setTimeout(() => { btn.style.transform = ''; }, 180);
+
+  floatEmoji(emoji, btn);
+}
+
+function floatEmoji(emoji, btn) {
+  const rect = btn.getBoundingClientRect();
+  const el = document.createElement('div');
+  const uid = 'fe-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+  el.id = uid;
+  el.className = 'float-emoji';
+  el.textContent = emoji;
+  el.style.left = (rect.left + rect.width / 2) + 'px';
+  el.style.top = rect.top + 'px';
+  document.body.appendChild(el);
+  fluentemoji.parse('#' + uid); // render via free Fluent Emoji CDN (same style as Microsoft Teams)
+  setTimeout(() => el.remove(), 1800);
+}
+
+// Render all emoji (buttons + labels) as Fluent Emoji images on load
+fluentemoji.parse('body');
 </script>
 </body>
 </html>
