@@ -201,8 +201,8 @@ function msg(a, b) {
   document.getElementById('t').textContent = a;
   document.getElementById('c').textContent = b;
   document.getElementById('m').style.display = 'flex';
-  confetti({ particleCount: 120, spread: 80 });
-  fluentemoji.parse('#m');
+  try { confetti({ particleCount: 120, spread: 80 }); } catch (e) {}
+  safeFluentParse('#m');
 }
 window.onclick = e => { if (e.target == document.getElementById('m')) document.getElementById('m').style.display = 'none'; }
 
@@ -308,15 +308,16 @@ async function react(btn) {
   const key = btn.dataset.key;
   const countEl = btn.querySelector('.count');
 
-  // little bounce feedback + floating emoji, instant
-  btn.style.transform = 'scale(1.2)';
-  setTimeout(() => { btn.style.transform = ''; }, 180);
-  floatEmoji(emoji, btn);
+  // bounce feedback, safe even if it errors
+  try { btn.style.transform = 'scale(1.2)'; setTimeout(() => { btn.style.transform = ''; }, 180); } catch (e) {}
 
-  // optimistic local bump so it feels instant
+  // optimistic local bump so it feels instant — this must run no matter what
   const current = parseInt(countEl.textContent || '0', 10);
   const next = current + 1;
   countEl.textContent = next;
+
+  // floating emoji animation is decorative only; never let it block the count above
+  try { floatEmoji(emoji, btn); } catch (e) {}
 
   try {
     if (window.storage) {
@@ -349,12 +350,24 @@ function floatEmoji(emoji, btn) {
   el.style.left = (rect.left + rect.width / 2) + 'px';
   el.style.top = rect.top + 'px';
   document.body.appendChild(el);
-  fluentemoji.parse('#' + uid); // render via free Fluent Emoji CDN (same style as Microsoft Teams)
+  safeFluentParse('#' + uid); // render via Fluent Emoji CDN if available (same style as Microsoft Teams)
   setTimeout(() => el.remove(), 1800);
 }
 
-// Render all emoji (buttons + labels) as Fluent Emoji images on load
-fluentemoji.parse('body');
+// Safe wrapper: only calls fluentemoji if the CDN script actually loaded,
+// so a failed/blocked CDN never breaks reactions, counting, or the modal.
+function safeFluentParse(selector) {
+  try {
+    if (typeof fluentemoji !== 'undefined' && fluentemoji && typeof fluentemoji.parse === 'function') {
+      fluentemoji.parse(selector);
+    }
+  } catch (e) {
+    // ignore - plain unicode emoji will just be shown instead of the fancy icon set
+  }
+}
+
+// Render all emoji (buttons + labels) as Fluent Emoji images on load, if available
+safeFluentParse('body');
 </script>
 </body>
 </html>
