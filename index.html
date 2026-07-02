@@ -54,8 +54,31 @@ footer{text-align:center;padding:50px;color:#64748b}
 .fs-btn{position:fixed;top:20px;right:20px;z-index:500;display:flex;align-items:center;gap:8px;
 background:rgba(255,255,255,.85);backdrop-filter:blur(10px);border:1px solid #dbeafe;
 color:#2563eb;font-family:Manrope,sans-serif;font-weight:700;font-size:13px;
-padding:10px 16px;border-radius:30px;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.1);transition:.25s}
+padding:10px 16px;border-radius:30px;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.1);transition:opacity .4s,transform .4s,box-shadow .25s}
 .fs-btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.15)}
+.fs-btn.fs-hidden{opacity:0;pointer-events:none;transform:translateY(-8px)}
+
+.fs-toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);
+max-width:90%;background:#1e293bee;color:#fff;padding:14px 22px;border-radius:14px;
+font-family:Manrope,sans-serif;font-size:14px;line-height:1.5;text-align:center;
+z-index:1000;opacity:0;pointer-events:none;transition:.35s;box-shadow:0 15px 35px rgba(0,0,0,.25)}
+.fs-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Presentation mode: kicks in automatically while in fullscreen */
+body.presentation-mode{display:flex;min-height:100vh;align-items:center}
+body.presentation-mode .container{padding:24px 40px}
+body.presentation-mode h1{font-size:96px}
+body.presentation-mode h2{font-size:28px}
+body.presentation-mode .hero p{font-size:18px;max-width:900px}
+body.presentation-mode .name{font-size:32px}
+body.presentation-mode .dashboard{gap:26px;margin:45px 0}
+body.presentation-mode .stat{padding:32px}
+body.presentation-mode .value{font-size:42px}
+body.presentation-mode .slide iframe{height:min(78vh,820px)}
+body.presentation-mode .react-btn .emoji img.emoji{width:44px;height:44px}
+body.presentation-mode .react-btn .emoji{font-size:44px}
+body.presentation-mode .react-btn{padding:18px 26px 14px}
+body.presentation-mode footer h2{font-size:34px}
 
 /* Emoji reactions */
 .reactions{display:flex;justify-content:center;flex-wrap:wrap;gap:14px;margin:-10px 0 40px}
@@ -80,7 +103,7 @@ animation:floatUp 1.7s ease-out forwards;}
 </style>
 </head>
 <body>
-<button class="fs-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ <span id="fsLabel">Toàn màn hình</span></button>
+<button class="fs-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ <span id="fsLabel">Toàn màn hình</span><span style="opacity:.55;font-weight:600">(F)</span></button>
 <div class="container">
   <div class="hero">
     <div class="badge">📅 Last Working Day • 26 June 2026</div>
@@ -116,27 +139,27 @@ animation:floatUp 1.7s ease-out forwards;}
 
   <!-- Reactions -->
   <div class="reactions" id="reactions">
-    <button class="react-btn" data-emoji="👍" onclick="react(this)">
+    <button class="react-btn" data-emoji="👍" data-key="tinvoquoc-thankyou-like" onclick="react(this)">
       <span class="emoji">👍</span>
       <span class="count">0</span>
       <span class="react-label">THÍCH</span>
     </button>
-    <button class="react-btn" data-emoji="❤️" onclick="react(this)">
+    <button class="react-btn" data-emoji="❤️" data-key="tinvoquoc-thankyou-love" onclick="react(this)">
       <span class="emoji">❤️</span>
       <span class="count">0</span>
       <span class="react-label">YÊU THÍCH</span>
     </button>
-    <button class="react-btn" data-emoji="😂" onclick="react(this)">
+    <button class="react-btn" data-emoji="😂" data-key="tinvoquoc-thankyou-haha" onclick="react(this)">
       <span class="emoji">😂</span>
       <span class="count">0</span>
       <span class="react-label">HAHA</span>
     </button>
-    <button class="react-btn" data-emoji="😮" onclick="react(this)">
+    <button class="react-btn" data-emoji="😮" data-key="tinvoquoc-thankyou-wow" onclick="react(this)">
       <span class="emoji">😮</span>
       <span class="count">0</span>
       <span class="react-label">WOW</span>
     </button>
-    <button class="react-btn" data-emoji="🥲" onclick="react(this)">
+    <button class="react-btn" data-emoji="🥲" data-key="tinvoquoc-thankyou-touched" onclick="react(this)">
       <span class="emoji">🥲</span>
       <span class="count">0</span>
       <span class="react-label">BỊN RỊN</span>
@@ -183,38 +206,137 @@ function msg(a, b) {
 }
 window.onclick = e => { if (e.target == document.getElementById('m')) document.getElementById('m').style.display = 'none'; }
 
-/* ---------- Fullscreen toggle ---------- */
+/* ---------- Fullscreen toggle (upgraded) ---------- */
+function fsElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement ||
+         document.mozFullScreenElement || document.msFullscreenElement;
+}
+function fsSupported() {
+  const el = document.documentElement;
+  return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen);
+}
+function requestFs(el) {
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  return fn ? fn.call(el) : Promise.reject();
+}
+function exitFs() {
+  const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+  return fn ? fn.call(document) : Promise.reject();
+}
 function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(() => {});
+  if (!fsSupported()) {
+    showFsToast('Trình duyệt này không hỗ trợ toàn màn hình. Trên iPhone: dùng nút Chia sẻ → "Thêm vào MH chính" để mở như một app riêng.');
+    return;
+  }
+  if (!fsElement()) {
+    requestFs(document.documentElement).catch(() => {
+      showFsToast('Không thể bật toàn màn hình trên thiết bị này.');
+    });
   } else {
-    document.exitFullscreen();
+    exitFs();
   }
 }
-document.addEventListener('fullscreenchange', () => {
-  document.getElementById('fsLabel').textContent = document.fullscreenElement ? 'Thoát' : 'Toàn màn hình';
+function showFsToast(text) {
+  let toast = document.getElementById('fsToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'fsToast';
+    toast.className = 'fs-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toast.classList.remove('show'), 3500);
+}
+
+function updateFsUI() {
+  const active = !!fsElement();
+  document.getElementById('fsLabel').textContent = active ? 'Thoát' : 'Toàn màn hình';
+  document.body.classList.toggle('presentation-mode', active);
+}
+['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+  .forEach(evt => document.addEventListener(evt, updateFsUI));
+
+// Keyboard shortcut: press "f" to toggle fullscreen
+document.addEventListener('keydown', e => {
+  if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    toggleFullscreen();
+  }
 });
 
-/* ---------- Emoji reactions ---------- */
-// Load saved counts
-document.querySelectorAll('.react-btn').forEach(btn => {
-  const emoji = btn.dataset.emoji;
-  const saved = localStorage.getItem('react_' + emoji);
-  if (saved) btn.querySelector('.count').textContent = saved;
-});
+// Auto-hide the fullscreen button after a few seconds of inactivity while in presentation mode
+let fsIdleTimer;
+function armFsAutoHide() {
+  const btn = document.getElementById('fsBtn');
+  btn.classList.remove('fs-hidden');
+  clearTimeout(fsIdleTimer);
+  if (fsElement()) {
+    fsIdleTimer = setTimeout(() => btn.classList.add('fs-hidden'), 3000);
+  }
+}
+document.addEventListener('mousemove', armFsAutoHide);
+document.addEventListener('touchstart', armFsAutoHide);
+document.addEventListener('fullscreenchange', armFsAutoHide);
 
-function react(btn) {
+
+/* ---------- Emoji reactions (shared, persistent count via window.storage) ---------- */
+
+// Load current shared counts on page load
+async function loadReactionCounts() {
+  const buttons = document.querySelectorAll('.react-btn');
+  for (const btn of buttons) {
+    const key = btn.dataset.key;
+    const countEl = btn.querySelector('.count');
+    try {
+      if (window.storage) {
+        const result = await window.storage.get(key, true); // shared = true
+        countEl.textContent = result ? (parseInt(result.value, 10) || 0) : 0;
+      } else {
+        countEl.textContent = localStorage.getItem(key) || 0;
+      }
+    } catch (e) {
+      // key doesn't exist yet (no one has reacted) -> start at 0
+      countEl.textContent = 0;
+    }
+  }
+}
+loadReactionCounts();
+
+async function react(btn) {
   const emoji = btn.dataset.emoji;
+  const key = btn.dataset.key;
   const countEl = btn.querySelector('.count');
-  const count = parseInt(localStorage.getItem('react_' + emoji) || '0', 10) + 1;
-  localStorage.setItem('react_' + emoji, count);
-  countEl.textContent = count;
 
-  // little bounce feedback
+  // little bounce feedback + floating emoji, instant
   btn.style.transform = 'scale(1.2)';
   setTimeout(() => { btn.style.transform = ''; }, 180);
-
   floatEmoji(emoji, btn);
+
+  // optimistic local bump so it feels instant
+  const current = parseInt(countEl.textContent || '0', 10);
+  const next = current + 1;
+  countEl.textContent = next;
+
+  try {
+    if (window.storage) {
+      // read the latest shared value first to avoid clobbering other visitors' reactions
+      let latest = 0;
+      try {
+        const result = await window.storage.get(key, true);
+        latest = result ? (parseInt(result.value, 10) || 0) : 0;
+      } catch (e) {
+        latest = 0;
+      }
+      const updated = latest + 1;
+      await window.storage.set(key, String(updated), true);
+      countEl.textContent = updated; // real-time shared count across everyone
+    } else {
+      localStorage.setItem(key, String(next));
+    }
+  } catch (e) {
+    // storage unreachable: keep the optimistic local bump already shown
+  }
 }
 
 function floatEmoji(emoji, btn) {
