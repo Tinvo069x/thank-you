@@ -67,6 +67,26 @@ padding:10px 16px;border-radius:30px;cursor:pointer;box-shadow:0 8px 20px rgba(0
 .fs-btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.15)}
 .fs-btn.fs-hidden{opacity:0;pointer-events:none;transform:translateY(-8px)}
 
+/* View counter - fixed corner badge */
+.views-corner{position:fixed;top:20px;left:20px;z-index:500;display:flex;align-items:center;gap:8px;
+background:rgba(255,255,255,.85);backdrop-filter:blur(10px);border:1px solid #dbeafe;
+color:#2563eb;font-family:Manrope,sans-serif;font-weight:700;font-size:13px;
+padding:10px 16px;border-radius:30px;box-shadow:0 8px 20px rgba(0,0,0,.1);
+transition:opacity .4s,transform .4s,box-shadow .25s}
+.views-corner:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.15)}
+.views-corner .eye{font-size:15px}
+.views-corner .live-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;
+box-shadow:0 0 0 rgba(22,163,74,.6);animation:pulseDot 1.8s infinite}
+@keyframes pulseDot{
+  0%{box-shadow:0 0 0 0 rgba(22,163,74,.6)}
+  70%{box-shadow:0 0 0 8px rgba(22,163,74,0)}
+  100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}
+}
+.views-corner.fs-hidden{opacity:0;pointer-events:none;transform:translateY(-8px)}
+@media (max-width:640px){
+  .views-corner{top:auto;bottom:20px;left:20px;font-size:12px;padding:8px 14px}
+}
+
 .fs-toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);
 max-width:90%;background:#1e293bee;color:#fff;padding:14px 22px;border-radius:14px;
 font-family:Manrope,sans-serif;font-size:14px;line-height:1.5;text-align:center;
@@ -113,6 +133,11 @@ animation:floatUp 1.7s ease-out forwards;}
 </head>
 <body>
 <button class="fs-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ <span id="fsLabel">Toàn màn hình</span><span style="opacity:.55;font-weight:600">(F)</span></button>
+<div class="views-corner" id="viewsCorner" title="Lượt xem trực tiếp, dùng chung cho mọi người xem trang này">
+  <span class="live-dot"></span>
+  <span class="eye">👁️</span>
+  <span id="viewsCornerCount">…</span>
+</div>
 <div class="container">
   <div class="hero">
     <div class="badge">📅 Last Working Day • 26 June 2026</div>
@@ -287,10 +312,15 @@ document.addEventListener('keydown', e => {
 let fsIdleTimer;
 function armFsAutoHide() {
   const btn = document.getElementById('fsBtn');
+  const corner = document.getElementById('viewsCorner');
   btn.classList.remove('fs-hidden');
+  if (corner) corner.classList.remove('fs-hidden');
   clearTimeout(fsIdleTimer);
   if (fsElement()) {
-    fsIdleTimer = setTimeout(() => btn.classList.add('fs-hidden'), 3000);
+    fsIdleTimer = setTimeout(() => {
+      btn.classList.add('fs-hidden');
+      if (corner) corner.classList.add('fs-hidden');
+    }, 3000);
   }
 }
 document.addEventListener('mousemove', armFsAutoHide);
@@ -422,10 +452,12 @@ async function trackPageView() {
   const updatedEl = document.getElementById('viewsUpdated');
   const localKey = COUNTER_NAMESPACE + '-' + COUNTER_KEY;
 
+  const cornerEl = document.getElementById('viewsCornerCount');
   const render = (n) => {
     const formatted = Number(n).toLocaleString('vi-VN');
     bigEl.textContent = formatted;
     pillEl.textContent = formatted;
+    if (cornerEl) cornerEl.textContent = formatted;
   };
 
   // Try each free CountAPI endpoint in order until one works
@@ -472,8 +504,36 @@ async function trackPageView() {
     bigEl.textContent = '—';
     pillEl.textContent = '—';
   }
+
+  // expose render so the polling refresher below can reuse it
+  trackPageView._render = render;
+  trackPageView._localKey = localKey;
 }
 trackPageView();
+
+// Periodically re-fetch the current shared count (no increment) so everyone
+// looking at the page at the same time sees the number climb in near real-time
+// as other visitors arrive — not just on their own page load.
+async function refreshPageViewCount() {
+  const namespace = COUNTER_NAMESPACE, key = COUNTER_KEY;
+  const getEndpoints = [
+    `https://countapi.mileshilliard.com/api/v1/get/${namespace}/${key}`,
+    `https://api.countapi.xyz/get/${namespace}/${key}`
+  ];
+  for (const url of getEndpoints) {
+    try {
+      const data = await fetchWithTimeout(url, 4000);
+      const value = data && (data.value ?? data.count);
+      if (typeof value === 'number' && trackPageView._render) {
+        trackPageView._render(value);
+      }
+      return;
+    } catch (e) {
+      continue;
+    }
+  }
+}
+setInterval(refreshPageViewCount, 20000); // refresh every 20s
 </script>
 </body>
 </html>
