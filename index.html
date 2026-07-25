@@ -24,6 +24,15 @@ h1{font:700 68px "Cormorant Garamond",serif;margin:20px 0 8px}
 h2{color:#2563eb}
 .hero p{max-width:760px;margin:10px auto;color:#64748b;line-height:1.7}
 .name{margin:20px 0;font-size:26px;font-weight:700;color:#2563eb}
+
+/* View counter pill */
+.views-pill{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:8px 18px;
+border-radius:30px;background:rgba(255,255,255,.75);backdrop-filter:blur(10px);
+border:1px solid #dbeafe;color:#2563eb;font-weight:700;font-size:14px}
+.views-pill .eye{font-size:16px}
+.views-pill .sep{opacity:.4;font-weight:400}
+.views-pill #viewsPill{min-width:18px;display:inline-block}
+
 .dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:35px 0}
 .stat{background:rgba(255,255,255,.7);backdrop-filter:blur(10px);border-radius:18px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center}
 .label{font-size:11px;letter-spacing:2px;color:#94a3b8}
@@ -112,11 +121,20 @@ animation:floatUp 1.7s ease-out forwards;}
     <p>Every journey is made meaningful by the people we meet along the way. Thank you to everyone who has been part of my journey.</p>
     <div class="name">— Tin Vo Quoc —</div>
 
+    <!-- View counter pill -->
+    <div class="views-pill">
+      <span class="eye">👁️</span>
+      <span>Lượt xem: <span id="viewsPill">…</span></span>
+      <span class="sep">|</span>
+      <span id="viewsUpdated" style="font-weight:400;color:#94a3b8;font-size:12px"></span>
+    </div>
+
     <div class="dashboard">
       <div class="stat"><div class="label">TODAY</div><div id="today" class="small"></div></div>
       <div class="stat"><div class="label">LIVE CLOCK</div><div id="clock" class="value"></div></div>
       <div class="stat"><div class="label">STATUS</div><div id="status"></div></div>
       <div class="stat"><div class="label">LEAVING TTI</div><div id="days" class="value"></div></div>
+      <div class="stat"><div class="label">LƯỢT XEM</div><div id="views" class="value">—</div></div>
     </div>
   </div>
 
@@ -368,6 +386,94 @@ function safeFluentParse(selector) {
 
 // Render all emoji (buttons + labels) as Fluent Emoji images on load, if available
 safeFluentParse('body');
+
+/* ---------- View counter ----------
+   Uses CountAPI (free, no signup, no API key) to keep a real shared
+   view count that works no matter where this HTML file is hosted.
+   IMPORTANT: change COUNTER_KEY to something unique to you before
+   publishing (e.g. include your name/domain) so it never collides
+   with someone else's counter — all CountAPI keys are public/shared. */
+const COUNTER_NAMESPACE = 'tinvoquoc-tti-thankyou-2026'; // <- đổi thành chuỗi riêng của bạn nếu muốn
+const COUNTER_KEY = 'pageviews';
+const COUNTER_ENDPOINTS = [
+  // Primary: actively maintained community fork of the original CountAPI
+  `https://countapi.mileshilliard.com/api/v1/hit/${COUNTER_NAMESPACE}/${COUNTER_KEY}`,
+  // Fallback: original countapi.xyz (kept in case the primary is down)
+  `https://api.countapi.xyz/hit/${COUNTER_NAMESPACE}/${COUNTER_KEY}`
+];
+
+async function fetchWithTimeout(url, ms = 5000) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    clearTimeout(t);
+    if (!res.ok) throw new Error('bad status ' + res.status);
+    return await res.json();
+  } catch (e) {
+    clearTimeout(t);
+    throw e;
+  }
+}
+
+async function trackPageView() {
+  const bigEl = document.getElementById('views');
+  const pillEl = document.getElementById('viewsPill');
+  const updatedEl = document.getElementById('viewsUpdated');
+  const localKey = COUNTER_NAMESPACE + '-' + COUNTER_KEY;
+
+  const render = (n) => {
+    const formatted = Number(n).toLocaleString('vi-VN');
+    bigEl.textContent = formatted;
+    pillEl.textContent = formatted;
+  };
+
+  // Try each free CountAPI endpoint in order until one works
+  for (const url of COUNTER_ENDPOINTS) {
+    try {
+      const data = await fetchWithTimeout(url);
+      const value = data && (data.value ?? data.count);
+      if (typeof value === 'number') {
+        render(value);
+        localStorage.setItem(localKey, String(value)); // keep an offline backup copy
+        updatedEl.textContent = 'vừa cập nhật';
+        setTimeout(() => { updatedEl.textContent = ''; }, 2500);
+        return;
+      }
+    } catch (e) {
+      // this endpoint failed/timed out — try the next one
+      continue;
+    }
+  }
+
+  // All network counters failed: fall back to window.storage (works inside Claude.ai)
+  try {
+    if (window.storage) {
+      let current = 0;
+      try {
+        const result = await window.storage.get(localKey, true);
+        current = result ? (parseInt(result.value, 10) || 0) : 0;
+      } catch (e) { current = 0; }
+      const updated = current + 1;
+      await window.storage.set(localKey, String(updated), true);
+      render(updated);
+      return;
+    }
+  } catch (e) { /* continue to final fallback */ }
+
+  // Last resort: local-only count (only visible on this device/browser)
+  try {
+    let current = parseInt(localStorage.getItem(localKey) || '0', 10);
+    current += 1;
+    localStorage.setItem(localKey, String(current));
+    render(current);
+    updatedEl.textContent = 'đếm cục bộ (offline)';
+  } catch (e) {
+    bigEl.textContent = '—';
+    pillEl.textContent = '—';
+  }
+}
+trackPageView();
 </script>
 </body>
 </html>
